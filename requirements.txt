@@ -1,0 +1,12 @@
+flask
+langchain
+langchain-community
+langchain-huggingface
+langchain-openai
+langchain-core
+langchain-text-splitters
+faiss-cpu
+sentence-transformers
+langdetect
+PyPDF2
+openai
