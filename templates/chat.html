@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Diabetes Chatbot</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Light gray background */
+        }
+        .chat-image {
+            max-width: 500px;
+            max-height: 500px;
+            display: block;
+            margin: 10px auto;
+            border-radius: 0.75rem; /* Rounded corners for images */
+        }
+        a {
+            color: #2563eb; /* Blue for links */
+            text-decoration: underline;
+        }
+        a:hover {
+            color: #1d4ed8; /* Darker blue on hover */
+        }
+        
+        /* Thinking animation for dots */
+        .thinking-dots {
+            display: inline-block;
+            animation: thinking 1.5s infinite;
+        }
+        
+        @keyframes thinking {
+            0%, 20% { opacity: 0; }
+            50% { opacity: 1; }
+            80%, 100% { opacity: 0; }
+        }
+        
+        .thinking-dots:nth-child(2) {
+            animation-delay: 0.3s;
+        }
+        
+        .thinking-dots:nth-child(3) {
+            animation-delay: 0.6s;
+        }
+        
+        /* Pulse animation for the whole thinking message block */
+        .thinking-message {
+            animation: pulse 2s infinite;
+            background: linear-gradient(45deg, #f0f9ff, #e0f2fe); /* Light blue gradient */
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        
+        /* Disabled form when processing */
+        .processing {
+            pointer-events: none; /* Disable interaction */
+            opacity: 0.7; /* Dim it slightly */
+        }
+        
+        .processing button {
+            background: #9ca3af !important; /* Gray out button */
+            cursor: not-allowed !important;
+        }
+        
+        /* Smooth transitions for new messages */
+        .message-enter {
+            animation: messageSlideIn 0.3s ease-out;
+        }
+        
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Loading spinner for button */
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db; /* Blue spinner */
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Focus ring for accessibility */
+        input:focus, button:focus {
+            outline: 2px solid #3b82f6; /* Blue outline */
+            outline-offset: 2px;
+        }
+        
+        /* Mobile optimizations for responsiveness */
+        @media (max-width: 640px) {
+            .chat-container {
+                margin-top: 20px;
+                padding: 0 16px;
+            }
+            
+            h1 {
+                font-size: 2rem; /* Smaller heading on mobile */
+            }
+        }
+
+        /* Styles for hidden sources */
+        .sources-container {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
+            opacity: 0;
+        }
+        .sources-container.show {
+            max-height: 200px; /* Adjust as needed based on expected content height */
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col justify-start items-center">
+    <div class="w-full max-w-4xl mt-10 px-6 chat-container">
+        <h1 class="text-4xl sm:text-5xl font-extrabold text-blue-900 mb-6 text-left">Diabetes Chatbot</h1>
+        <div class="bg-white shadow-xl border border-gray-300 rounded-2xl">
+            <h2 class="bg-gradient-to-r from-green-400 via-blue-500 to-purple-600 text-white text-lg sm:text-xl font-semibold py-3 px-4 rounded-t-2xl">Ask a question</h2>
+            
+            <!-- Chat Messages Display Area -->
+            {% if chat_history %}
+            <ul class="p-4 space-y-4 max-h-[60vh] overflow-y-auto" id="chat-messages">
+                {% for message in chat_history %}
+                {# Ensure content is rendered safely, allowing HTML from the backend #}
+                {# For assistant messages, 'content' is the answer, 'sources' is a list of URLs #}
+                {% set message_content = message.content|safe %}
+                {% set message_sources = message.sources|default([]) %} {# Default to empty list if no sources #}
+                {% set message_language = message.language|default('en') %} {# Default language #}
+
+                {% if message.type == 'user' %}
+                <li class="bg-blue-100 border-l-4 border-blue-500 rounded-xl p-4 shadow-sm text-sm sm:text-base text-blue-900 font-medium message-enter">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold mr-3">
+                            U
+                        </div>
+                        <div class="flex-1">
+                            {{ message_content }}
+                        </div>
+                    </div>
+                </li>
+                {# Handle potential image responses (if your LLM generates JSON with image_url) #}
+                {% elif message_content.startswith('{') and message_content.endswith('}') %}
+                {# This section might not be strictly needed based on your current LLM output, 
+                   but kept for robust handling of diverse response types. #}
+                {% set json_content = message_content|fromjson %}
+                <li class="bg-blue-50 rounded-xl p-4 shadow-sm text-gray-700 text-sm sm:text-base message-enter">
+                    <p>{{ json_content.description }}</p>
+                    <img src="{{ json_content.image_url }}" alt="Generated Image" class="chat-image">
+                </li>
+                {% else %}
+                {# Default assistant message #}
+                <li class="bg-gray-100 rounded-xl p-4 shadow-sm text-gray-700 text-sm sm:text-base message-enter">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 w-8 h-8 bg-gray-500 rounded-full flex items-center justify-center text-white text-sm font-bold mr-3">
+                            🤖
+                        </div>
+                        <div class="flex-1">
+                            {{ message_content }} {# Display the main answer content #}
+
+                            {% if message_sources %}
+                                {% set source_button_text = 'Source' if message_language == 'en' else 'Lähde' %}
+                                {# Generate a unique ID for each button and container for server-side rendered messages #}
+                                {% set unique_id_suffix = loop.index %} 
+                                <div class="mt-3 text-right">
+                                    <button id="source-btn-{{ unique_id_suffix }}" 
+                                            class="text-xs font-medium px-4 py-1 bg-gray-700 text-white rounded-xl hover:bg-gray-900 transition duration-200 source-toggle-btn"
+                                            data-sources="{{ message_sources|tojson }}" {# Pass sources as JSON data attribute #}
+                                            data-language="{{ message_language }}"> {# Pass language as data attribute #}
+                                        {{ source_button_text }}
+                                    </button>
+                                </div>
+                                {# This container is now EMPTY in Jinja. JavaScript will populate it. #}
+                                <div id="sources-container-{{ unique_id_suffix }}" class="sources-container mt-2 ml-10 pl-2 border-l border-gray-300">
+                                    {# Sources will be dynamically inserted here by JavaScript #}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </li>
+                {% endif %}
+                {% endfor %}
+            </ul>
+            {% else %}
+            <!-- Initial state when no chat history -->
+            <div class="text-center py-8 text-gray-500" id="empty-chat-message">
+                <div class="text-6xl mb-4">💬</div>
+                <p class="text-lg">No chat history yet.</p>
+                <p class="text-sm">Ask your first question below!</p>
+            </div>
+            {% endif %}
+            
+            <!-- Chat Input Form -->
+            <form action="/chat" method="post" class="px-4 pt-4 border-t border-gray-200 bg-gray-100 rounded-b-2xl" id="chat-form">
+                <div class="flex flex-col sm:flex-row items-stretch gap-4 mb-2">
+                    <input class="flex-1 px-4 py-2 rounded-xl border border-gray-400 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition duration-200" 
+                           type="text" 
+                           name="user_question" 
+                           id="user_question" 
+                           required 
+                           placeholder="Type your question about diabetes..."
+                           autocomplete="off"
+                           maxlength="500">
+                    <button class="px-6 py-2 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 focus:bg-blue-700 transition duration-300 min-w-[100px]" 
+                            type="submit" 
+                            id="submit-btn">
+                        <span id="submit-text">Submit</span>
+                        <span id="submit-loading" class="hidden flex items-center justify-center">
+                            <div class="spinner"></div>
+                            Thinking...
+                        </span>
+                    </button>
+                </div>
+                <div class="text-xs text-gray-500 mb-2 text-center">
+                    Press Enter to send • Ask about diabetes, symptoms, treatments, and more
+                </div>
+            </form>
+        </div>
+        
+        <!-- Optional: Quick suggestion buttons -->
+        <div class="mt-4 flex flex-wrap gap-2 justify-center" id="quick-suggestions">
+            <button class="suggestion-btn px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition duration-200"
+                    onclick="askQuestion('What is diabetes?')">
+                What is diabetes?
+            </button>
+            <button class="suggestion-btn px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition duration-200"
+                    onclick="askQuestion('What are the symptoms of diabetes?')">
+                What are the symptoms?
+            </button>
+            <button class="suggestion-btn px-3 py-1 bg-white border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition duration-200"
+                    onclick="askQuestion('How is diabetes treated?')">
+                How is diabetes treated?
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('chat-form');
+            const submitBtn = document.getElementById('submit-btn');
+            const submitText = document.getElementById('submit-text');
+            const submitLoading = document.getElementById('submit-loading');
+            const userInput = document.getElementById('user_question');
+            let chatMessages = document.getElementById('chat-messages'); 
+            const quickSuggestions = document.getElementById('quick-suggestions');
+            const emptyChatMessage = document.getElementById('empty-chat-message'); 
+
+            function scrollToBottom() {
+                if (chatMessages) {
+                    requestAnimationFrame(() => {
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    });
+                }
+            }
+            
+            // --- Initial Setup on Load ---
+            scrollToBottom();
+            userInput.focus();
+            
+            if (chatMessages && chatMessages.children.length > 0 && !emptyChatMessage) {
+                quickSuggestions.style.display = 'none';
+            } else if (chatMessages && chatMessages.children.length === 0 && emptyChatMessage) {
+                quickSuggestions.style.display = 'flex'; 
+            }
+
+            // Attach event listeners to server-rendered source buttons AND dynamically generated ones
+            // This function is now reusable for both scenarios
+            function attachSourceButtonListener(button, sources, language, container) {
+                button.addEventListener('click', function() {
+                    if (container.innerHTML.trim() === '') { // Only populate if empty
+                        const sourceButtonText = language === 'en' ? 'Source' : 'Lähde';
+                        const sourcesHeader = `<strong class="text-gray-600">${sourceButtonText === 'Source' ? 'Sources:' : 'Lähteet:'}</strong><br>`;
+                        const sourcesHtml = sources.map(url => 
+                            `<a href="${url}" target="_blank" class="block text-xs text-blue-600 hover:text-blue-800 break-words py-0.5">📎 ${url}</a>`
+                        ).join('');
+                        container.innerHTML = sourcesHeader + sourcesHtml;
+                    }
+                    container.classList.toggle('show');
+                    scrollToBottom();
+                });
+            }
+
+            // Loop through existing (server-rendered) messages and attach listeners
+            document.querySelectorAll('.source-toggle-btn').forEach(button => {
+                const suffix = button.id.split('-')[2];
+                const container = document.getElementById(`sources-container-${suffix}`);
+                if (button.dataset.sources && button.dataset.language && container) {
+                    const sources = JSON.parse(button.dataset.sources);
+                    const language = button.dataset.language;
+                    attachSourceButtonListener(button, sources, language, container);
+                }
+            });
+
+            // --- Main Form Submission Logic (AJAX) ---
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault(); 
+                
+                const question = userInput.value.trim();
+                
+                if (!question) {
+                    userInput.focus();
+                    console.warn('Please enter a question.');
+                    return;
+                }
+                
+                if (question.includes('\0') || question.includes('\x00')) {
+                    console.error('Invalid characters detected in question.');
+                    return;
+                }
+                
+                if (emptyChatMessage) {
+                    emptyChatMessage.remove();
+                    if (!chatMessages) {
+                        const parentDiv = form.closest('.bg-white');
+                        chatMessages = document.createElement('ul');
+                        chatMessages.id = 'chat-messages';
+                        chatMessages.className = 'p-4 space-y-4 max-h-[60vh] overflow-y-auto';
+                        parentDiv.insertBefore(chatMessages, form);
+                    }
+                }
+
+                const userMessageHtml = `
+                    <li class="bg-blue-100 border-l-4 border-blue-500 rounded-xl p-4 shadow-sm text-sm sm:text-base text-blue-900 font-medium message-enter">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold mr-3">U</div>
+                            <div class="flex-1">${escapeHtml(question)}</div>
+                        </div>
+                    </li>
+                `;
+                chatMessages.insertAdjacentHTML('beforeend', userMessageHtml);
+                
+                const thinkingMessageHtml = `
+                    <li class="bg-blue-50 border-l-4 border-blue-300 rounded-xl p-4 shadow-sm text-sm sm:text-base text-blue-700 thinking-message" id="thinking-message">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 w-8 h-8 bg-blue-400 rounded-full flex items-center justify-center text-white text-sm font-bold mr-3">🤖</div>
+                            <div class="flex-1 flex items-center">
+                                <span>🤔 Thinking...</span>
+                                <div class="ml-2">
+                                    <span class="thinking-dots">.</span>
+                                    <span class="thinking-dots">.</span>
+                                    <span class="thinking-dots">.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                `;
+                chatMessages.insertAdjacentHTML('beforeend', thinkingMessageHtml);
+                const currentThinkingMessage = document.getElementById('thinking-message'); 
+                
+                scrollToBottom();
+                
+                submitText.classList.add('hidden');
+                submitLoading.classList.remove('hidden');
+                submitLoading.classList.add('flex');
+                form.classList.add('processing');
+                
+                userInput.disabled = true;
+                submitBtn.disabled = true;
+                
+                quickSuggestions.style.display = 'none'; 
+                
+                userInput.value = ''; 
+                userInput.style.height = 'auto'; 
+                
+                console.log('Sending AJAX request for question:', question);
+                
+                try {
+                    const response = await fetch('/process_question', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ question: question })
+                    });
+                    
+                    const data = await response.json(); 
+                    
+                    if (data.answer) {
+                        if (currentThinkingMessage) {
+                            let messageContentHtml = `
+                                <div class="flex items-start">
+                                    <div class="flex-shrink-0 w-8 h-8 bg-gray-500 rounded-full flex items-center justify-center text-white text-sm font-bold mr-3">🤖</div>
+                                    <div class="flex-1">
+                                        ${data.answer}
+                                    </div>
+                                </div>`;
+                            currentThinkingMessage.innerHTML = messageContentHtml;
+                            currentThinkingMessage.classList.remove('thinking-message'); 
+                            currentThinkingMessage.removeAttribute('id');
+
+                            // Add source button and container for AJAX responses
+                            if (data.sources && data.sources.length > 0) {
+                                const sourceButtonText = data.language === 'en' ? 'Source' : 'Lähde';
+                                const sourceButtonId = `source-btn-${Date.now()}`; // Unique ID
+                                const sourcesContainerId = `sources-container-${Date.now()}`; // Unique ID
+
+                                const sourcesHtml = data.sources.map(url => 
+                                    `<a href="${url}" target="_blank" class="block text-xs text-blue-600 hover:text-blue-800 break-words py-0.5">📎 ${url}</a>`
+                                ).join('');
+
+                                const sourceElementsHtml = `
+                                    <div class="mt-3 text-right">
+                                        <button id="${sourceButtonId}" class="text-xs font-medium px-4 py-1 bg-gray-700 text-white rounded-xl hover:bg-gray-900 transition duration-200">
+                                            ${sourceButtonText}
+                                        </button>
+                                    </div>
+                                    <div id="${sourcesContainerId}" class="sources-container mt-2 ml-10 pl-2 border-l border-gray-300">
+                                        <strong class="text-gray-600">${sourceButtonText === 'Source' ? 'Sources:' : 'Lähteet:'}</strong><br>
+                                        ${sourcesHtml}
+                                    </div>
+                                `;
+                                currentThinkingMessage.querySelector('.flex-1').insertAdjacentHTML('beforeend', sourceElementsHtml);
+                                
+                                const newSourceButton = document.getElementById(sourceButtonId);
+                                const newSourcesContainer = document.getElementById(sourcesContainerId);
+
+                                if (newSourceButton && newSourcesContainer) {
+                                    // Use the universal attachSourceButtonListener for new messages too
+                                    attachSourceButtonListener(newSourceButton, data.sources, data.language, newSourcesContainer);
+                                }
+                            }
+
+                        }
+                    } else if (data.error) {
+                        if (currentThinkingMessage) {
+                            currentThinkingMessage.innerHTML = `
+                                <div class="flex items-start">
+                                    <div class="flex-shrink-0 w-8 h-8 bg-red-400 rounded-full flex items-center justify-center text-white text-sm font-bold mr-3">!</div>
+                                    <div class="flex-1">Error: ${escapeHtml(data.error)}</div>
+                                </div>`;
+                            currentThinkingMessage.classList.remove('thinking-message');
+                            currentThinkingMessage.removeAttribute('id');
+                        }
+                    }
+                } catch (error) {
+                    console.error("❌ Network or parsing error:", error);
+                    if (currentThinkingMessage) {
+                        currentThinkingMessage.innerHTML = `
+                            <div class="flex items-start">
+                                <div class="flex-shrink-0 w-8 h-8 bg-red-400 rounded-full flex items-center justify-center text-white text-sm font-bold mr-3">!</div>
+                                <div class="flex-1">Sorry, a connection error occurred. Please try again.</div>
+                            </div>`;
+                        currentThinkingMessage.classList.remove('thinking-message');
+                        currentThinkingMessage.removeAttribute('id');
+                    }
+                } finally {
+                    submitText.classList.remove('hidden');
+                    submitLoading.classList.add('hidden');
+                    submitLoading.classList.remove('flex');
+                    form.classList.remove('processing');
+                    
+                    userInput.disabled = false;
+                    submitBtn.disabled = false;
+                    userInput.focus(); 
+                    scrollToBottom(); 
+                }
+            });
+            
+            userInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault(); 
+                    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); 
+                }
+            });
+            
+            userInput.addEventListener('paste', function(e) {
+                e.preventDefault();
+                const text = (e.clipboardData || window.clipboardData).getData('text');
+                const trimmedText = text.substring(0, 500); 
+                document.execCommand('insertText', false, trimmedText);
+            });
+            
+            userInput.addEventListener('input', function() {
+                this.style.height = 'auto'; 
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px'; 
+            });
+            
+            window.askQuestion = function(question) {
+                userInput.value = question;
+                userInput.focus();
+                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); 
+            };
+            
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList') {
+                        scrollToBottom();
+                    }
+                });
+            });
+            
+            if (chatMessages) {
+                observer.observe(chatMessages, { childList: true, subtree: true });
+            }
+            
+            document.addEventListener('keydown', function(e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                    e.preventDefault();
+                    userInput.focus();
+                }
+                
+                if (e.key === 'Escape') {
+                    userInput.value = '';
+                    userInput.blur();
+                }
+            });
+
+            function escapeHtml(text) {
+                const map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+                return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+            }
+        });
+    </script>
+</body>
+</html>

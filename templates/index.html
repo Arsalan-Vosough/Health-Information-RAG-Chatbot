@@ -1,0 +1,40 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Diabetes Chatbot</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div class="relative isolate overflow-hidden bg-cover bg-center min-h-screen" style="background-image: url('{{ url_for('static', filename='Background.png') }}');">
+        <div class="absolute inset-0 bg-white bg-opacity-70 backdrop-blur-sm"></div>
+
+        <div class="w-screen flex flex-col justify-between px-6 pt-16 pb-6 lg:px-20 lg:py-20 relative z-10 min-h-screen">
+            <div class="max-w-xl">
+                <h1 class="text-5xl font-extrabold tracking-tight text-blue-900 sm:text-6xl drop-shadow">Diabetes Chatbot</h1>
+                <p class="mt-4 text-lg leading-8 text-gray-700 max-w-md">An AI-powered assistant designed to guide users through health-related topics about diabetes, using trusted Finnish medical sources.</p>
+
+                <form action="/chat" method="get">
+                    <div class="mt-8">
+                        <button type="submit"
+                            class="bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 hover:from-blue-600 hover:to-pink-600 text-white px-10 py-4 rounded-2xl text-xl font-semibold shadow-lg transition duration-300">
+                            Start Chatting
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="mt-16 text-sm text-gray-600">
+            </div>
+        </div>
+    </div>
+</body>
+</html>
